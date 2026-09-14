@@ -8,35 +8,58 @@ import (
 	"sync"
 )
 
-var backends = []string{
-	"http://localhost:8081",
-	"http://localhost:8082",
-	"http://localhost:8083",
+type Backend struct {
+	URL		string
+	Alive	bool
+}
+
+var backends = []Backend{
+	{
+		URL: 	"http://localhost:8081",
+		Alive: 	true,
+	},
+	{
+		URL: 	"http://localhost:8082",
+		Alive: 	true,
+	},
+	{
+		URL: 	"http://localhost:8083",
+		Alive: 	true,
+	},
 }
 
 var currentBackend = 0
 var backendMutex sync.Mutex
 
-func getNextBackend() string {
+func getNextBackend() (Backend, bool) {
 	backendMutex.Lock()
 	defer backendMutex.Unlock()
+
+	for i := 0; i < len(backends); i++ {
+		backend := backends[currentBackend]
+		
+		currentBackend = (currentBackend + 1) % len(backends)
+
+		if backend.Alive {
+			return backend, true
+		}
+	}
 	
-	backend := backends[currentBackend]
-
-	// TEMP: force a data race
-	// time.Sleep(10 * time.Millisecond)
-
-	currentBackend = (currentBackend + 1) % len(backends)
-	return backend
+	return Backend{}, false
 }
 
 func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Load balancer recieved: ", r.Method, r.URL.Path)
 
-	backend := getNextBackend()
-	backendURL := backend + r.URL.RequestURI()
+	backend, ok := getNextBackend()
+	if !ok {
+		http.Error(w, "No healthy backend available", http.StatusServiceUnavailable)
+		return
+	}
 
-	fmt.Println("Routing", r.Method, r.URL.RequestURI(), "to", backend)
+	backendURL := backend.URL + r.URL.RequestURI()
+
+	fmt.Println("Routing", r.Method, r.URL.RequestURI(), "to", backend.URL)
 
 	proxyReq, err := http.NewRequest(
 		r.Method,

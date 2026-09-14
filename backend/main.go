@@ -5,34 +5,40 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 )
 
-func helloHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("----- BACKEND RECEIVED -----")
-	fmt.Println("Method:", r.Method)
-	fmt.Println("Path:", r.URL.Path)
-	fmt.Println("Query:", r.URL.RawQuery)
-	fmt.Println("Host:", r.Host)
-	fmt.Println("Headers:", r.Header)
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read body", http.StatusInternalServerError)
-		return
+func main() {
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: go run ./backend <port>")
 	}
 
-	fmt.Println("Body:", string(body))
+	port := os.Args[1]
 
-	w.Header().Set("X-Backend", "backend-8081")
-	fmt.Fprintln(w, "Hello from backend!")
-}
+	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("-------- BACKEND", port, "RECIEVED -------")
+		fmt.Println("Method:", r.Method)
+		fmt.Println("Path:", r.URL.Path)
+		fmt.Println("Query:", r.URL.RawQuery)
 
-func main() {
-	http.HandleFunc("/hello", helloHandler)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+			return
+		}
 
-	fmt.Println("Backend running on http://localhost:8081")
+		fmt.Println("Body:", string(body))
 
-	err := http.ListenAndServe(":8081", nil)
+		w.Header().Set("X-Backend", port)
+
+		fmt.Fprintf(w, "Hello from backend port %s!\n", port)
+	})
+
+	address := ":" + port
+
+	fmt.Println("Backend running on http://localhost:", port)
+
+	err := http.ListenAndServe(address, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

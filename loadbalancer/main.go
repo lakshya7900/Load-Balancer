@@ -5,12 +5,38 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 )
+
+var backends = []string{
+	"http://localhost:8081",
+	"http://localhost:8082",
+	"http://localhost:8083",
+}
+
+var currentBackend = 0
+var backendMutex sync.Mutex
+
+func getNextBackend() string {
+	backendMutex.Lock()
+	defer backendMutex.Unlock()
+	
+	backend := backends[currentBackend]
+
+	// TEMP: force a data race
+	// time.Sleep(10 * time.Millisecond)
+
+	currentBackend = (currentBackend + 1) % len(backends)
+	return backend
+}
 
 func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Load balancer recieved: ", r.Method, r.URL.Path)
 
-	backendURL := "http://localhost:8081" + r.URL.RequestURI()
+	backend := getNextBackend()
+	backendURL := backend + r.URL.RequestURI()
+
+	fmt.Println("Routing", r.Method, r.URL.RequestURI(), "to", backend)
 
 	proxyReq, err := http.NewRequest(
 		r.Method,
@@ -44,7 +70,7 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func main()  {
+func main() {
 	http.HandleFunc("/hello", proxyHandler)
 
 	fmt.Println("Load balancer running on http://localhost:8080")

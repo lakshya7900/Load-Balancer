@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	// "time"
 )
 
 func main() {
@@ -30,6 +31,20 @@ func main() {
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+
+	// http.HandleFunc("/slow", func(w http.ResponseWriter, r *http.Request) {
+	// 	delay := 2 * time.Second
+
+	// 	if port == "8081" {
+	// 		delay = 8 * time.Second
+	// 	}
+
+	// 	fmt.Println("Slow request on backend", port, "delay:", delay)
+
+	// 	time.Sleep(delay)
+
+	// 	fmt.Fprintf(w, "Slow response from backend %s\n", port)
+	// })
 
 	address := ":" + port
 

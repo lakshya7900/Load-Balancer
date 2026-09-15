@@ -10,44 +10,48 @@ import (
 )
 
 type Backend struct {
-	URL   string
-	Alive bool
+	URL               string
+	Alive             bool
+	ActiveConnections int
 }
 
 var backends = []Backend{
 	{
-		URL:   "http://localhost:8081",
-		Alive: true,
+		URL:               "http://localhost:8081",
+		Alive:             true,
+		ActiveConnections: 0,
 	},
 	{
-		URL:   "http://localhost:8082",
-		Alive: true,
+		URL:               "http://localhost:8082",
+		Alive:             true,
+		ActiveConnections: 0,
 	},
 	{
-		URL:   "http://localhost:8083",
-		Alive: true,
+		URL:               "http://localhost:8083",
+		Alive:             true,
+		ActiveConnections: 0,
 	},
 }
 
 var currentBackend = 0
 var backendMutex sync.Mutex
 
-func getNextBackend() (Backend, bool) {
-	backendMutex.Lock()
-	defer backendMutex.Unlock()
+// func getNextBackend() (Backend, bool) {
+// 	backendMutex.Lock()
+// 	defer backendMutex.Unlock()
 
-	for i := 0; i < len(backends); i++ {
-		backend := backends[currentBackend]
+// 	for i := 0; i < len(backends); i++ {
+// 		backend := backends[currentBackend]
 
-		currentBackend = (currentBackend + 1) % len(backends)
+// 		currentBackend = (currentBackend + 1) % len(backends)
 
-		if backend.Alive {
-			return backend, true
-		}
-	}
+// 		if backend.Alive {
+// 			return backend, true
+// 		}
+// 	}
 
-	return Backend{}, false
-}
+// 	return Backend{}, false
+// }
 
 func checkBackends(client *http.Client) {
 	for i := range backends {
@@ -91,14 +95,59 @@ func startHealthChecker() {
 	}
 }
 
+func getLeastConnectionsBackend() (int, Backend, bool) {
+	backendMutex.Lock()
+	defer backendMutex.Unlock()
+
+	selectedIndex := -1
+
+	for i := range backends {
+		if !backends[i].Alive {
+			continue
+		}
+
+		if selectedIndex == -1 || backends[i].ActiveConnections < backends[selectedIndex].ActiveConnections {
+			selectedIndex = i
+		}
+	}
+
+	if selectedIndex == -1 {
+		return -1, Backend{}, false
+	}
+
+	backends[selectedIndex].ActiveConnections++
+
+	fmt.Printf(
+		"Selected %s | active connections: %d\n",
+		backends[selectedIndex].URL,
+		backends[selectedIndex].ActiveConnections,
+	)
+
+	return selectedIndex, backends[selectedIndex], true
+}
+
+func releaseBackend(index int) {
+	backendMutex.Lock()
+	defer backendMutex.Unlock()
+
+	backends[index].ActiveConnections--
+
+	fmt.Printf(
+		"Released %s | active connections: %d\n",
+		backends[index].URL,
+		backends[index].ActiveConnections,
+	)
+}
+
 func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Load balancer recieved: ", r.Method, r.URL.Path)
 
-	backend, ok := getNextBackend()
+	backendIndex, backend, ok := getLeastConnectionsBackend()
 	if !ok {
 		http.Error(w, "No healthy backend available", http.StatusServiceUnavailable)
 		return
 	}
+	defer releaseBackend(backendIndex)
 
 	backendURL := backend.URL + r.URL.RequestURI()
 
@@ -139,7 +188,7 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	go startHealthChecker()
 
-	http.HandleFunc("/hello", proxyHandler)
+	http.HandleFunc("/", proxyHandler)
 
 	fmt.Println("Load balancer running on http://localhost:8080")
 

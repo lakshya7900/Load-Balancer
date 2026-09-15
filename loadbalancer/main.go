@@ -6,25 +6,26 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 type Backend struct {
-	URL		string
-	Alive	bool
+	URL   string
+	Alive bool
 }
 
 var backends = []Backend{
 	{
-		URL: 	"http://localhost:8081",
-		Alive: 	true,
+		URL:   "http://localhost:8081",
+		Alive: true,
 	},
 	{
-		URL: 	"http://localhost:8082",
-		Alive: 	true,
+		URL:   "http://localhost:8082",
+		Alive: true,
 	},
 	{
-		URL: 	"http://localhost:8083",
-		Alive: 	true,
+		URL:   "http://localhost:8083",
+		Alive: true,
 	},
 }
 
@@ -37,15 +38,57 @@ func getNextBackend() (Backend, bool) {
 
 	for i := 0; i < len(backends); i++ {
 		backend := backends[currentBackend]
-		
+
 		currentBackend = (currentBackend + 1) % len(backends)
 
 		if backend.Alive {
 			return backend, true
 		}
 	}
-	
+
 	return Backend{}, false
+}
+
+func checkBackends(client *http.Client) {
+	for i := range backends {
+		url := backends[i].URL + "/health"
+		alive := false
+
+		resp, err := client.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				alive = true
+			}
+		}
+
+		setBackendAlive(i, alive)
+	}
+}
+
+func setBackendAlive(index int, alive bool) {
+	backendMutex.Lock()
+	defer backendMutex.Unlock()
+
+	oldState := backends[index].Alive
+	backends[index].Alive = alive
+
+	if oldState != alive {
+		if alive {
+			fmt.Println("Backend recovered:", backends[index].URL)
+		} else {
+			fmt.Println("Backend marked unhealthy:", backends[index].URL)
+		}
+	}
+}
+
+func startHealthChecker() {
+	client := http.Client{Timeout: 1 * time.Second}
+
+	for {
+		checkBackends(&client)
+		time.Sleep(2 * time.Second)
+	}
 }
 
 func proxyHandler(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +137,8 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	go startHealthChecker()
+
 	http.HandleFunc("/hello", proxyHandler)
 
 	fmt.Println("Load balancer running on http://localhost:8080")

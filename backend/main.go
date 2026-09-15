@@ -16,11 +16,6 @@ func main() {
 	port := os.Args[1]
 
 	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("-------- BACKEND", port, "RECIEVED -------")
-		fmt.Println("Method:", r.Method)
-		fmt.Println("Path:", r.URL.Path)
-		fmt.Println("Query:", r.URL.RawQuery)
-
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
@@ -30,8 +25,10 @@ func main() {
 		fmt.Println("Body:", string(body))
 
 		w.Header().Set("X-Backend", port)
+	})
 
-		fmt.Fprintf(w, "Hello from backend port %s!\n", port)
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
 	})
 
 	address := ":" + port

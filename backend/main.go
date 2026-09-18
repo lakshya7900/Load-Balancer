@@ -2,92 +2,27 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"time"
 	// "time"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatal("Usage: go run ./backend <port>")
+	if len(os.Args) < 3 {
+		log.Fatal("Usage: go run ./backend <port> <service>")
 	}
 
 	port := os.Args[1]
+	service := os.Args[2]
 
-	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
-			return
-		}
-
-		fmt.Println("Body:", string(body))
-
-		w.Header().Set("X-Backend", port)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("Service=%s | Backend=%s | Recieved=%s %s\n", service, port, r.Method, r.URL.Path)
+		fmt.Fprintf(w, "Service=%s | Backend=%s | Path=%s\n", service, port, r.URL.Path)
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	})
-
-	// http.HandleFunc("/slow", func(w http.ResponseWriter, r *http.Request) {
-	// 	delay := 2 * time.Second
-
-	// 	if port == "8081" {
-	// 		delay = 8 * time.Second
-	// 	}
-
-	// 	fmt.Println("Slow request on backend", port, "delay:", delay)
-
-	// 	time.Sleep(delay)
-
-	// 	fmt.Fprintf(w, "Slow response from backend %s\n", port)
-	// })
-
-	http.HandleFunc("/hang", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Hanging request on backend", port)
-
-		time.Sleep(30 * time.Second)
-
-		fmt.Fprintf(w, "Finally responded from backend %s\n", port)
-	})
-
-	http.HandleFunc("/retry-test", func(
-		w http.ResponseWriter,
-		r *http.Request,
-	) {
-		if port == "8081" {
-			time.Sleep(10 * time.Second)
-		}
-
-		fmt.Fprintf(
-			w,
-			"Retry test succeeded on backend %s\n",
-			port,
-		)
-	})
-
-	http.HandleFunc("/cb-test", func(
-		w http.ResponseWriter,
-		r *http.Request,
-	) {
-		// if port == "8081" {
-		// 	fmt.Println(
-		// 		"Simulating broken app request on",
-		// 		port,
-		// 	)
-
-		// 	time.Sleep(10 * time.Second)
-		// }
-
-		fmt.Fprintf(
-			w,
-			"Circuit breaker test succeeded on backend %s\n",
-			port,
-		)
 	})
 
 	address := ":" + port

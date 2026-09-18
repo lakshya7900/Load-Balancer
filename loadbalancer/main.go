@@ -56,6 +56,21 @@ const (
 const failureThreshold = 3
 const circuitCooldown = 5 * time.Second
 
+type TokenBucket struct {
+	Capacity	float64
+	Tokens		float64
+	RefillRate	float64
+	LastRefill	time.Time
+
+	mu sync.Mutex
+}
+var rateLimiter = TokenBucket{
+	Capacity:	10,
+	Tokens:		10,
+	RefillRate:	2,
+	LastRefill:	time.Now(),
+}
+
 // func getNextBackend() (Backend, bool) {
 // 	backendMutex.Lock()
 // 	defer backendMutex.Unlock()
@@ -245,7 +260,46 @@ func recordBackendSuccess(index int) {
 	}
 }
 
+func (tb *TokenBucket) Allow() bool {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	now := time.Now()
+
+	elapsed := now.Sub(tb.LastRefill).Seconds()
+
+	fmt.Printf(
+		"Before refill: tokens=%.2f elapsed=%.2fs adding=%.2f\n",
+		tb.Tokens,
+		elapsed,
+		elapsed*tb.RefillRate,
+	)
+
+	tb.Tokens += elapsed * tb.RefillRate
+
+	if tb.Tokens > tb.Capacity {
+		tb.Tokens = tb.Capacity
+	}
+
+	tb.LastRefill = now
+
+	fmt.Printf("After refill: tokens=%.2f\n", tb.Tokens)
+
+	if tb.Tokens < 1 {
+		return false
+	}
+
+	tb.Tokens--
+
+	return true
+}
+
 func proxyHandler(w http.ResponseWriter, r *http.Request) {
+	if !rateLimiter.Allow() {
+		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
 	fmt.Println("Load balancer received:", r.Method, r.URL.RequestURI())
 
 	maxAttempts := 1

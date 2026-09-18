@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 	// "time"
 )
 
@@ -45,6 +46,49 @@ func main() {
 
 	// 	fmt.Fprintf(w, "Slow response from backend %s\n", port)
 	// })
+
+	http.HandleFunc("/hang", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Hanging request on backend", port)
+
+		time.Sleep(30 * time.Second)
+
+		fmt.Fprintf(w, "Finally responded from backend %s\n", port)
+	})
+
+	http.HandleFunc("/retry-test", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		if port == "8081" {
+			time.Sleep(10 * time.Second)
+		}
+
+		fmt.Fprintf(
+			w,
+			"Retry test succeeded on backend %s\n",
+			port,
+		)
+	})
+
+	http.HandleFunc("/cb-test", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		// if port == "8081" {
+		// 	fmt.Println(
+		// 		"Simulating broken app request on",
+		// 		port,
+		// 	)
+
+		// 	time.Sleep(10 * time.Second)
+		// }
+
+		fmt.Fprintf(
+			w,
+			"Circuit breaker test succeeded on backend %s\n",
+			port,
+		)
+	})
 
 	address := ":" + port
 

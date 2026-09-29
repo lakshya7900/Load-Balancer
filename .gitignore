@@ -30,3 +30,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+benchmarks/
+loadbalancer-bin
+backend-bin
+.DS_Store
